@@ -1,0 +1,6 @@
+{
+  "name": "EduGenie: Google Gemini Powered Learning Assistant",
+  "description": "An intelligent, adaptive AI learning companion powered by Google Gemini featuring Socratic tutoring, concept mind maps, active recall flashcards, Feynman evaluator, adaptive quizzes, and study roadmaps.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
