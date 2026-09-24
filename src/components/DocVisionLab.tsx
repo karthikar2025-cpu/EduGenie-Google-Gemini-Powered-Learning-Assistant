@@ -139,7 +139,7 @@ export const DocVisionLab: React.FC<DocVisionLabProps> = ({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Convert SVG data URL to a clean PNG data URL for Gemini multimodal vision
+  // Convert SVG data URL to a clean PNG data URL for multimodal vision
   const convertSvgToPng = (svgDataUrl: string): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -489,7 +489,7 @@ export const DocVisionLab: React.FC<DocVisionLabProps> = ({
               className="w-full py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-sky-600/30 transition-all"
             >
               <Sparkles className="w-4 h-4" />
-              <span>{isAnalyzing ? 'Analyzing Visual & Document Data...' : 'Analyze Document with Gemini'}</span>
+              <span>{isAnalyzing ? 'Analyzing Visual & Document Data...' : 'Analyze Document'}</span>
             </button>
           </div>
         </div>

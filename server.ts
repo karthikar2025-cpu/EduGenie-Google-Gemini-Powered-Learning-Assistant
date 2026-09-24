@@ -61,9 +61,9 @@ async function generateWithFallback(params: {
 }
 
 // Helper error handler
-function handleGenAiError(res: express.Response, error: any, customMsg = 'Gemini API Error') {
+function handleGenAiError(res: express.Response, error: any, customMsg = 'Service API Error') {
   console.error(customMsg, error);
-  const errMsg = error?.message || 'An error occurred while generating response with Gemini.';
+  const errMsg = error?.message || 'An error occurred while generating response.';
   res.status(500).json({ error: errMsg, details: String(error) });
 }
 
@@ -82,7 +82,7 @@ app.post('/api/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message is required.' });
     }
 
-    let systemInstruction = `You are EduGenie, an expert, enthusiastic, and empathetic AI learning mentor and academic coach powered by Google Gemini.
+    let systemInstruction = `You are EduGenie, an expert, enthusiastic, and empathetic AI learning mentor and academic coach.
 Subject context: ${subject}. Target learner level: ${gradeLevel}.
 
 Teaching Mode: `;

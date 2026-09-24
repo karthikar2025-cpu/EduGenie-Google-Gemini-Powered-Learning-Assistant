@@ -45,7 +45,7 @@ export const SocraticChat: React.FC<SocraticChatProps> = ({
     {
       id: 'welcome-msg',
       role: 'model',
-      text: `Hello! I'm **EduGenie**, your personal learning mentor powered by Google Gemini.\n\nWhether you're breaking down a tricky mathematical theorem, untangling algorithmic data structures, or exploring scientific concepts, I'm here to guide you toward true understanding.\n\nChoose a **Teaching Mode** above and ask me anything, or pick one of the sample inquiries below to get started!`,
+      text: `Hello! I'm **EduGenie**, your personal learning mentor.\n\nWhether you're breaking down a tricky mathematical theorem, untangling algorithmic data structures, or exploring scientific concepts, I'm here to guide you toward true understanding.\n\nChoose a **Teaching Mode** above and ask me anything, or pick one of the sample inquiries below to get started!`,
       keyTakeaways: [
         'Active questioning locks concepts into long-term memory faster than passive reading',
         'Switch between Socratic, Deep Dive, ELI5, and Drillmaster anytime',
@@ -165,7 +165,7 @@ export const SocraticChat: React.FC<SocraticChatProps> = ({
       const errorMessage: ChatMessage = {
         id: 'msg-' + Date.now(),
         role: 'model',
-        text: `⚠️ **Connection Error**: ${err?.message || 'Could not communicate with Gemini.'}\nPlease verify that the server is active.`,
+        text: `⚠️ **Connection Error**: ${err?.message || 'Could not communicate with the service.'}\nPlease verify that the server is active.`,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMessage]);

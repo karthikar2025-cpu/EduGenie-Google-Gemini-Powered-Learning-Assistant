@@ -22,7 +22,7 @@ export function speakText(text: string, onEnd?: () => void) {
   // Prefer a natural English voice if available
   const voices = window.speechSynthesis.getVoices();
   const preferredVoice = voices.find(
-    (v) => (v.name.includes('Google') || v.name.includes('Natural')) && v.lang.startsWith('en')
+    (v) => (v.name.includes('Natural') || v.name.includes('Enhanced')) && v.lang.startsWith('en')
   ) || voices.find((v) => v.lang.startsWith('en'));
 
   if (preferredVoice) {

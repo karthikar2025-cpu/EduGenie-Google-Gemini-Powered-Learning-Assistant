@@ -105,7 +105,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-2">
               <span className="text-xl font-black tracking-tight text-white">EduGenie</span>
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                Gemini 3.8 Flash
+                Active Learning Engine
               </span>
             </div>
             <p className="text-xs text-slate-400">Intelligent Learning & Socratic Mastery Companion</p>
