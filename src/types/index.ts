@@ -76,6 +76,17 @@ export interface FlashcardDeck {
   cards: Flashcard[];
 }
 
+export type ExamStyle = 'standard' | 'ap_collegiate' | 'stem_quantitative' | 'clinical_vignette';
+export type TestMode = 'diagnostic' | 'practice_exam' | 'custom_mcq';
+
+export interface DistractorRationale {
+  optionIndex: number;
+  optionLetter: string;
+  text: string;
+  rationale: string;
+  isCorrect: boolean;
+}
+
 export interface QuizQuestion {
   id: string;
   question: string;
@@ -85,13 +96,44 @@ export interface QuizQuestion {
   hint: string;
   conceptTested: string;
   userSelectedIndex?: number;
+  distractorRationales?: DistractorRationale[];
+  bloomLevel?: 'Remembering' | 'Understanding' | 'Applying' | 'Analyzing' | 'Evaluating' | string;
+  subtopic?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  timeEstimateSeconds?: number;
+  isFlagged?: boolean;
 }
 
 export interface QuizData {
   quizTitle: string;
   topic: string;
   targetDifficulty: string;
+  examStyle?: ExamStyle;
+  mode?: TestMode;
+  recommendedTimeMinutes?: number;
+  overviewDescription?: string;
+  subtopicsCovered?: string[];
   questions: QuizQuestion[];
+}
+
+export interface SubtopicScore {
+  subtopic: string;
+  correct: number;
+  total: number;
+  percentage: number;
+  status: 'mastered' | 'progressing' | 'remediation_needed';
+}
+
+export interface PracticeTestDiagnostic {
+  overallScore: number;
+  totalQuestions: number;
+  percentage: number;
+  timeTakenSeconds: number;
+  projectedGradeOrPercentile: string;
+  subtopicPerformance: SubtopicScore[];
+  cognitiveLevelPerformance: { level: string; correct: number; total: number }[];
+  misconceptionInsights: { misconception: string; remedy: string; questionIndex: number }[];
+  nextSteps: string[];
 }
 
 export interface JargonItem {
@@ -141,6 +183,8 @@ export interface DailyTask {
   estimatedMinutes: number;
   taskType: 'theory' | 'practice' | 'quiz' | 'review' | 'project';
   completed?: boolean;
+  keyAction?: string;
+  recommendedTool?: 'quiz' | 'chat' | 'flashcards' | 'solver' | 'notes';
 }
 
 export interface StudyWeek {
@@ -152,10 +196,31 @@ export interface StudyWeek {
 
 export interface StudyPlanData {
   title: string;
+  subject?: string;
+  targetOutcome?: string;
   estimatedHoursTotal: number;
   coreCompetencies: string[];
+  personalizedAdvice?: string;
   weeks: StudyWeek[];
   proStudyTips: string[];
+}
+
+export interface MisconceptionDetail {
+  misconception: string;
+  explanation: string;
+  correction: string;
+}
+
+export interface AnswerFeedbackResult {
+  scorePercentage: number;
+  gradeLetter: string;
+  quickVerdict: string;
+  strengths: string[];
+  areasNeedingImprovement: string[];
+  misconceptionsIdentified: MisconceptionDetail[];
+  modelAnswer: string;
+  actionableNextStep: string;
+  followUpChallenge?: string;
 }
 
 export interface CornellCue {
@@ -172,9 +237,42 @@ export interface KeyFormulaOrTerm {
 export interface CornellNotesData {
   title: string;
   highLevelSummary: string;
+  readingTimeMinutes?: number;
+  format?: 'cornell' | 'cheat_sheet' | 'executive_outline' | 'flashcard_qa';
   cornellCues: CornellCue[];
   keyFormulasOrTerms: KeyFormulaOrTerm[];
   quickReviewPoints: string[];
+  examTraps?: string[];
+  cheatSheetRules?: string[];
+}
+
+export interface ConceptStep {
+  stepNumber: number;
+  stageTitle: string;
+  subtitle: string;
+  explanation: string;
+  analogyOrVisual?: string;
+  keyRuleOrFormula?: string;
+  pitfallToAvoid?: string;
+}
+
+export interface SelfCheckItem {
+  question: string;
+  answer: string;
+  explanation: string;
+}
+
+export interface ConceptExplainerResult {
+  conceptName: string;
+  coreIntuitionSummary: string;
+  difficultyLevel: string;
+  category: string;
+  intuitiveMetaphor: string;
+  steps: ConceptStep[];
+  realWorldScenario: string;
+  commonMisconceptions: string[];
+  selfCheckQuestions: SelfCheckItem[];
+  masteryTakeaway: string;
 }
 
 // Adaptive & Personalized Learning Pathways
@@ -282,5 +380,45 @@ export interface ParentDigestData {
     context: string;
   }[];
   encouragementTip: string;
+}
+
+// Multimodal Document & Vision Lab
+export type DocVisionMode = 'summarize' | 'qa' | 'solve_visual' | 'flashcards';
+
+export interface DocumentAnalysisResult {
+  mode: DocVisionMode;
+  documentTitle: string;
+  detectedType: 'diagram' | 'handwritten_notes' | 'textbook_page' | 'scientific_paper' | 'syllabus_or_assignment';
+  executiveSummary: string;
+  keyInsightsOrPoints: string[];
+  extractedFormulasOrTerms?: {
+    termOrFormula: string;
+    explanation: string;
+    locationContext?: string;
+  }[];
+  stepByStepSolution?: {
+    identifiedProblem: string;
+    steps: {
+      stepNumber: number;
+      action: string;
+      justification: string;
+    }[];
+    finalResultOrTakeaway: string;
+    verificationSanityCheck: string;
+  };
+  suggestedQuestions: string[];
+  flashcardPrompts?: {
+    front: string;
+    back: string;
+    mnemonic?: string;
+  }[];
+}
+
+export interface DocQAResponse {
+  question: string;
+  answer: string;
+  directEvidenceOrQuote: string;
+  socraticFollowUp: string;
+  relatedConcepts: string[];
 }
 

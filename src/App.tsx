@@ -16,6 +16,7 @@ import { CornellNotes } from './components/CornellNotes';
 import { AdaptivePathways } from './components/AdaptivePathways';
 import { GroupStudyHub } from './components/GroupStudyHub';
 import { EducatorDashboard } from './components/EducatorDashboard';
+import { DocVisionLab } from './components/DocVisionLab';
 import { SubjectCategory, GradeLevel } from './types';
 
 export default function App() {
@@ -105,6 +106,16 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'docvision' && (
+          <DocVisionLab
+            subject={selectedSubject}
+            gradeLevel={gradeLevel}
+            onLaunchChat={handleOpenChat}
+            onLaunchQuiz={handleOpenQuiz}
+            onLaunchMindmap={handleOpenMindmap}
+          />
+        )}
+
         {activeTab === 'pathways' && (
           <AdaptivePathways
             subject={selectedSubject}
@@ -139,7 +150,9 @@ export default function App() {
           <AdaptiveQuiz
             initialTopic={sharedTopic}
             subject={selectedSubject}
+            gradeLevel={gradeLevel}
             onExploreTopicInChat={handleOpenChat}
+            onLaunchFlashcards={handleOpenFlashcards}
           />
         )}
 
@@ -147,12 +160,17 @@ export default function App() {
           <FeynmanLab
             initialTopic={sharedTopic}
             subject={selectedSubject}
+            gradeLevel={gradeLevel}
+            onExploreInChat={handleOpenChat}
           />
         )}
 
         {activeTab === 'solver' && (
           <StepSolver
             subject={selectedSubject}
+            gradeLevel={gradeLevel}
+            onExploreInChat={handleOpenChat}
+            onLaunchQuiz={handleOpenQuiz}
           />
         )}
 
@@ -160,12 +178,18 @@ export default function App() {
           <StudyRoadmap
             subject={selectedSubject}
             gradeLevel={gradeLevel}
+            onLaunchQuiz={handleOpenQuiz}
+            onLaunchChat={handleOpenChat}
+            onLaunchFlashcards={handleOpenFlashcards}
           />
         )}
 
         {activeTab === 'notes' && (
           <CornellNotes
             subject={selectedSubject}
+            gradeLevel={gradeLevel}
+            onLaunchFlashcards={handleOpenFlashcards}
+            onLaunchQuiz={handleOpenQuiz}
           />
         )}
 

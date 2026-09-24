@@ -22,7 +22,8 @@ const ai = new GoogleGenAI({
 });
 
 // Middleware
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Helper with automatic fallback for high demand (503) spikes
 async function generateWithFallback(params: {
@@ -293,21 +294,54 @@ ${notes ? `Source Notes / Content:\n${notes}` : ''}`;
   }
 });
 
-// 4. Adaptive Quiz Engine
+// 4. Adaptive Quiz & Practice Test Engine
 app.post('/api/quiz', async (req, res) => {
   try {
-    const { topic, count = 5, difficulty = 'intermediate', focusArea = '' } = req.body;
-    if (!topic) {
-      return res.status(400).json({ error: 'Topic is required.' });
+    const {
+      topic,
+      count = 5,
+      difficulty = 'intermediate',
+      focusArea = '',
+      mode = 'diagnostic',
+      examStyle = 'standard',
+      sourceText = '',
+      subject = 'General Education',
+      gradeLevel = 'College / Undergraduate'
+    } = req.body;
+
+    if (!topic && !sourceText) {
+      return res.status(400).json({ error: 'Topic or source text is required.' });
     }
 
-    const systemInstruction = `You are EduGenie's Adaptive Testing Specialist.
-Generate challenging, high-quality multiple choice assessment questions that test true conceptual understanding and diagnostic reasoning rather than rote trivia.
-Include plausible distractors (common misconceptions) and comprehensive explanations for why the correct answer is right and why each wrong choice is incorrect.`;
+    const questionCount = Math.min(Math.max(Number(count) || 5, 3), 20);
 
-    const promptText = `Generate ${Math.min(Math.max(count, 3), 10)} quiz questions for topic: "${topic}".
-Difficulty: ${difficulty}.
-${focusArea ? `Focus Area: ${focusArea}` : ''}`;
+    const styleDescriptions: Record<string, string> = {
+      standard: 'Standard standardized academic multiple-choice format with conceptual clarity and high validity.',
+      ap_collegiate: 'Advanced Placement / Collegiate Exam rigor with multi-tiered stems, stimulus charts/data, and analytical depth.',
+      stem_quantitative: 'Rigorous calculation and quantitative problem solving with numerical scenarios, formulas, and exact units.',
+      clinical_vignette: 'Case-based clinical or situational scenarios testing differential reasoning, decision trees, and best practice evaluation.'
+    };
+
+    const systemInstruction = `You are EduGenie's Principal Assessment Designer & Psychometric Testing Specialist.
+Academic Context:
+- Subject: ${subject}
+- Grade Level: ${gradeLevel}
+- Assessment Mode: ${mode} (${mode === 'practice_exam' ? 'Full simulated timed practice exam' : mode === 'custom_mcq' ? 'Targeted multiple choice mastery' : 'Diagnostic formative assessment'})
+- Exam Style: ${examStyle} - ${styleDescriptions[examStyle] || styleDescriptions.standard}
+
+Guidelines for Item Generation:
+1. Construct unambiguous, high-yield multiple-choice questions testing genuine conceptual understanding, problem-solving, and cognitive depth (Bloom's Taxonomy).
+2. Avoid trivial recall or grammatical clues. Distractors must represent plausible, realistic misconceptions, common calculation pitfalls, or cognitive biases.
+3. For EVERY option (A, B, C, D), generate a precise distractor rationale explaining why that option is correct or specifically why it is a false lead.
+4. Estimate realistic time-to-solve in seconds (e.g. 60-120 seconds).
+5. Categorize each question by subtopic, difficulty level, and cognitive Bloom level (Remembering, Understanding, Applying, Analyzing, Evaluating).
+${sourceText ? `Base the questions primarily on the provided source notes/textbook text: "${sourceText.slice(0, 3000)}"` : ''}`;
+
+    const promptText = `Generate a ${questionCount}-question ${mode === 'practice_exam' ? 'comprehensive practice exam' : 'assessment'} for: "${topic || 'Provided Source Notes'}".
+Target Difficulty: ${difficulty}.
+Exam Style: ${examStyle}.
+${focusArea ? `Focus Area / Core Competencies: ${focusArea}` : ''}
+Ensure varied Bloom cognitive levels, distractor breakdowns for all options, and actionable explanations.`;
 
     const response = await generateWithFallback({
       contents: promptText,
@@ -320,6 +354,14 @@ ${focusArea ? `Focus Area: ${focusArea}` : ''}`;
             quizTitle: { type: Type.STRING },
             topic: { type: Type.STRING },
             targetDifficulty: { type: Type.STRING },
+            examStyle: { type: Type.STRING },
+            mode: { type: Type.STRING },
+            recommendedTimeMinutes: { type: Type.INTEGER },
+            overviewDescription: { type: Type.STRING },
+            subtopicsCovered: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
             questions: {
               type: Type.ARRAY,
               items: {
@@ -332,15 +374,36 @@ ${focusArea ? `Focus Area: ${focusArea}` : ''}`;
                     items: { type: Type.STRING }
                   },
                   correctIndex: { type: Type.INTEGER, description: '0-based index of correct option' },
-                  explanation: { type: Type.STRING, description: 'Deep explanation of the answer and common traps' },
-                  hint: { type: Type.STRING, description: 'A gentle nudge hint' },
-                  conceptTested: { type: Type.STRING }
+                  explanation: { type: Type.STRING, description: 'Deep pedagogical explanation of the correct answer' },
+                  hint: { type: Type.STRING, description: 'Socratic nudge without spoiling the answer' },
+                  conceptTested: { type: Type.STRING },
+                  bloomLevel: {
+                    type: Type.STRING,
+                    description: 'Remembering, Understanding, Applying, Analyzing, or Evaluating'
+                  },
+                  subtopic: { type: Type.STRING },
+                  difficulty: { type: Type.STRING, description: 'easy, medium, or hard' },
+                  timeEstimateSeconds: { type: Type.INTEGER },
+                  distractorRationales: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        optionIndex: { type: Type.INTEGER },
+                        optionLetter: { type: Type.STRING },
+                        text: { type: Type.STRING },
+                        rationale: { type: Type.STRING },
+                        isCorrect: { type: Type.BOOLEAN }
+                      },
+                      required: ['optionIndex', 'optionLetter', 'text', 'rationale', 'isCorrect']
+                    }
+                  }
                 },
                 required: ['id', 'question', 'options', 'correctIndex', 'explanation', 'hint', 'conceptTested']
               }
             }
           },
-          required: ['quizTitle', 'topic', 'targetDifficulty', 'questions']
+          required: ['quizTitle', 'topic', 'targetDifficulty', 'questions', 'recommendedTimeMinutes']
         }
       }
     });
@@ -349,6 +412,77 @@ ${focusArea ? `Focus Area: ${focusArea}` : ''}`;
     res.json(parsed);
   } catch (error) {
     handleGenAiError(res, error, 'Error in /api/quiz');
+  }
+});
+
+// 4b. Practice Test Diagnostic Analysis
+app.post('/api/quiz/diagnostics', async (req, res) => {
+  try {
+    const {
+      quizTitle,
+      topic,
+      examStyle = 'standard',
+      totalQuestions,
+      correctCount,
+      timeTakenSeconds = 0,
+      questionSummaries = []
+    } = req.body;
+
+    const percentage = Math.round(((correctCount || 0) / (totalQuestions || 1)) * 100);
+
+    const systemInstruction = `You are EduGenie's Senior Learning Analytics & Diagnostic Specialist.
+Given a student's performance on a quiz or practice exam:
+- Topic: ${topic}
+- Exam Style: ${examStyle}
+- Score: ${correctCount} / ${totalQuestions} (${percentage}%)
+- Time Taken: ${Math.round(timeTakenSeconds / 60)} minutes
+
+Analyze their results to:
+1. Provide an objective Projected Grade / Percentile estimation (e.g. AP 5 / 92nd percentile, or College A-).
+2. Identify the root-cause cognitive misconceptions behind any missed items.
+3. Formulate a 3-step prioritized action plan for targeted remediation.`;
+
+    const promptText = `Analyze this test attempt:
+Test Title: "${quizTitle}"
+Score: ${correctCount}/${totalQuestions} (${percentage}%)
+Questions Summary: ${JSON.stringify(questionSummaries.slice(0, 15))}`;
+
+    const response = await generateWithFallback({
+      contents: promptText,
+      config: {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            projectedGradeOrPercentile: { type: Type.STRING },
+            summaryAssessment: { type: Type.STRING },
+            misconceptionInsights: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  misconception: { type: Type.STRING },
+                  remedy: { type: Type.STRING },
+                  questionIndex: { type: Type.INTEGER }
+                },
+                required: ['misconception', 'remedy', 'questionIndex']
+              }
+            },
+            nextSteps: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          },
+          required: ['projectedGradeOrPercentile', 'summaryAssessment', 'misconceptionInsights', 'nextSteps']
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    res.json(parsed);
+  } catch (error) {
+    handleGenAiError(res, error, 'Error in /api/quiz/diagnostics');
   }
 });
 
@@ -503,22 +637,48 @@ Break down the problem using cognitive scaffolding:
   }
 });
 
-// 7. Study Roadmap & Schedule Architect
+// 7. Personalized Study Plan & Schedule Architect
 app.post('/api/study-plan', async (req, res) => {
   try {
-    const { goal, durationWeeks = 4, dailyHours = 2, currentLevel = 'Beginner' } = req.body;
+    const {
+      goal,
+      subject = 'General STEM',
+      gradeLevel = 'College / Undergraduate',
+      durationWeeks = 4,
+      dailyHours = 2,
+      currentLevel = 'Beginner',
+      targetOutcome = 'Exam Mastery & High Grade',
+      weakAreas = '',
+      schedulePreference = '5 days/week'
+    } = req.body;
+
     if (!goal) {
       return res.status(400).json({ error: 'Goal is required.' });
     }
 
-    const systemInstruction = `You are EduGenie's Master Curriculum Architect.
-Generate an actionable, balanced, and motivating day-by-day learning roadmap to take a student from their current level to mastery.
-Ensure spaced repetition, interleaving of practice questions, milestone mock tests, and rest days.`;
+    const systemInstruction = `You are EduGenie's Principal Learning Strategist & Study Plan Architect.
+Create a highly personalized, realistic, and motivating day-by-day study roadmap tailored to the student's:
+- Subject: ${subject}
+- Academic Level: ${gradeLevel}
+- Specific Goal: ${goal}
+- Target Outcome: ${targetOutcome}
+- Known Weaknesses / Focus Areas: ${weakAreas || 'Foundational to advanced progression'}
+- Available Time: ${dailyHours} hours/day across ${durationWeeks} weeks (${schedulePreference})
+- Starting Level: ${currentLevel}
 
-    const promptText = `Goal: "${goal}".
-Duration: ${durationWeeks} weeks.
-Daily available study time: ${dailyHours} hours/day.
-Learner level: ${currentLevel}.`;
+Pedagogical Structure:
+1. Break down into sequential milestone weeks (Theory -> Guided Application -> Synthesis & Timed Practice -> Final Exam Readiness).
+2. For each day, provide a concrete title, specific concept focus, time allocation, and recommended action.
+3. Recommend corresponding EduGenie tools ('quiz', 'chat', 'flashcards', 'solver', 'notes') to keep study sessions engaging.
+4. Include evidence-based cognitive retention advice (spaced repetition, Pomodoro intervals, active recall).`;
+
+    const promptText = `Generate a personalized ${durationWeeks}-week study plan for:
+Subject: "${subject}"
+Goal: "${goal}"
+Target Outcome: "${targetOutcome}"
+Daily Study Time: ${dailyHours} hours/day
+Starting Proficiency: ${currentLevel}
+Weak Areas: ${weakAreas || 'None specified'}`;
 
     const response = await generateWithFallback({
       contents: promptText,
@@ -529,11 +689,14 @@ Learner level: ${currentLevel}.`;
           type: Type.OBJECT,
           properties: {
             title: { type: Type.STRING },
+            subject: { type: Type.STRING },
+            targetOutcome: { type: Type.STRING },
             estimatedHoursTotal: { type: Type.INTEGER },
             coreCompetencies: {
               type: Type.ARRAY,
               items: { type: Type.STRING }
             },
+            personalizedAdvice: { type: Type.STRING },
             weeks: {
               type: Type.ARRAY,
               items: {
@@ -551,7 +714,9 @@ Learner level: ${currentLevel}.`;
                         title: { type: Type.STRING },
                         focus: { type: Type.STRING },
                         estimatedMinutes: { type: Type.INTEGER },
-                        taskType: { type: Type.STRING, description: 'theory, practice, quiz, review, or project' }
+                        taskType: { type: Type.STRING, description: 'theory, practice, quiz, review, or project' },
+                        keyAction: { type: Type.STRING, description: 'Specific active exercise to complete' },
+                        recommendedTool: { type: Type.STRING, description: 'quiz, chat, flashcards, solver, or notes' }
                       },
                       required: ['dayNumber', 'title', 'focus', 'estimatedMinutes', 'taskType']
                     }
@@ -577,19 +742,140 @@ Learner level: ${currentLevel}.`;
   }
 });
 
-// 8. Cornell Notes & Cheat Sheet Synthesizer
-app.post('/api/notes-synthesizer', async (req, res) => {
+// 7b. Free-Response Answer Evaluator & Diagnostic Feedback
+app.post('/api/answer-feedback', async (req, res) => {
   try {
-    const { rawText, format = 'cornell', title = 'Learning Notes' } = req.body;
-    if (!rawText) {
-      return res.status(400).json({ error: 'Text content is required.' });
+    const {
+      question,
+      studentAnswer,
+      subject = 'General Education',
+      gradeLevel = 'College / Undergraduate',
+      rubricOrCriteria = ''
+    } = req.body;
+
+    if (!question || !studentAnswer) {
+      return res.status(400).json({ error: 'Question and student answer are required.' });
     }
 
-    const systemInstruction = `You are a Cornell note-taking and academic synthesis specialist.
-Transform raw, messy, or unstructured notes/text into high-yield, beautifully organized educational summaries.`;
+    const systemInstruction = `You are EduGenie's Lead Educational Evaluator & Diagnostic Feedback Specialist.
+Your mission is to provide rigorous, constructive, encouraging, and clear feedback on a student's answer.
+Academic Context:
+- Subject: ${subject}
+- Grade Level: ${gradeLevel}
 
-    const promptText = `Title: "${title}". Format requested: "${format}".
-Source Content:
+Evaluation Guidelines:
+1. Be objective, supportive, and pedagogically precise.
+2. Praise specific accurate points and sound intuition first.
+3. Explicitly itemize 'areasNeedingImprovement'—identifying what was missing, incomplete, or flawed.
+4. Highlight any cognitive misconceptions with clear explanations and the exact correction.
+5. Provide a polished 'modelAnswer' demonstrating how a master student or subject expert would formulate a top-tier response.
+6. Provide a quick follow-up challenge question to immediately reinforce learning.`;
+
+    const promptText = `Question / Problem Prompt:
+"""
+${question}
+"""
+
+Student's Submitted Answer:
+"""
+${studentAnswer}
+"""
+
+${rubricOrCriteria ? `Grading Criteria / Rubric:\n${rubricOrCriteria}` : ''}`;
+
+    const response = await generateWithFallback({
+      contents: promptText,
+      config: {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            scorePercentage: { type: Type.INTEGER, description: 'Score from 0 to 100' },
+            gradeLetter: { type: Type.STRING, description: 'e.g. A+, A, B+, B, C, D, or F' },
+            quickVerdict: { type: Type.STRING, description: '1-sentence encouraging summary verdict' },
+            strengths: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'What the student explained or solved correctly'
+            },
+            areasNeedingImprovement: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'Concrete areas that were incomplete, missing, or need work'
+            },
+            misconceptionsIdentified: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  misconception: { type: Type.STRING },
+                  explanation: { type: Type.STRING },
+                  correction: { type: Type.STRING }
+                },
+                required: ['misconception', 'explanation', 'correction']
+              }
+            },
+            modelAnswer: {
+              type: Type.STRING,
+              description: 'Exemplary, well-reasoned model answer with complete clarity'
+            },
+            actionableNextStep: { type: Type.STRING },
+            followUpChallenge: { type: Type.STRING }
+          },
+          required: [
+            'scorePercentage',
+            'gradeLetter',
+            'quickVerdict',
+            'strengths',
+            'areasNeedingImprovement',
+            'misconceptionsIdentified',
+            'modelAnswer',
+            'actionableNextStep'
+          ]
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    res.json(parsed);
+  } catch (error) {
+    handleGenAiError(res, error, 'Error in /api/answer-feedback');
+  }
+});
+
+// 8. Concise Notes & High-Yield Synthesizer
+app.post('/api/notes-synthesizer', async (req, res) => {
+  try {
+    const {
+      rawText,
+      format = 'cornell',
+      lengthPreference = 'balanced',
+      title = 'Study Materials Synthesis',
+      subject = 'General Education',
+      gradeLevel = 'College / Undergraduate'
+    } = req.body;
+
+    if (!rawText) {
+      return res.status(400).json({ error: 'Study materials / text content is required.' });
+    }
+
+    const systemInstruction = `You are EduGenie's Master Academic Synthesizer.
+Your goal is to summarize lengthy study materials (textbooks, lecture transcripts, research articles, or notes) into extraordinarily concise, high-yield, structured study notes.
+Subject: ${subject}
+Academic Level: ${gradeLevel}
+Target Format: ${format} (options: 'cornell', 'cheat_sheet', 'executive_outline', 'flashcard_qa')
+Density Preference: ${lengthPreference} ('ultra_concise', 'balanced', or 'comprehensive')
+
+Key Pedagogical Requirements:
+1. Distill complex text down to its fundamental conceptual pillars without losing critical nuances or formulas.
+2. Formulate active-recall Cornell cues (inquisitive prompt questions on the left, punchy structured notes on the right).
+3. Extract essential definitions, equations, or theorems with importance annotations.
+4. Pinpoint frequent 'examTraps'—the most common misconceptions or errors students make on this topic.
+5. Provide actionable 'cheatSheetRules' or memory aids.`;
+
+    const promptText = `Title: "${title}". Format: "${format}". Density: "${lengthPreference}".
+Lengthy Source Material:
 """
 ${rawText}
 """`;
@@ -603,7 +889,8 @@ ${rawText}
           type: Type.OBJECT,
           properties: {
             title: { type: Type.STRING },
-            highLevelSummary: { type: Type.STRING },
+            highLevelSummary: { type: Type.STRING, description: 'Punchy 2-3 sentence executive summary' },
+            readingTimeMinutes: { type: Type.INTEGER, description: 'Estimated minutes to read original vs notes' },
             cornellCues: {
               type: Type.ARRAY,
               items: {
@@ -630,6 +917,16 @@ ${rawText}
             quickReviewPoints: {
               type: Type.ARRAY,
               items: { type: Type.STRING }
+            },
+            examTraps: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'Tricky questions or common errors on tests'
+            },
+            cheatSheetRules: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'Golden rules, mnemonics, or shortcuts'
             }
           },
           required: ['title', 'highLevelSummary', 'cornellCues', 'keyFormulasOrTerms', 'quickReviewPoints']
@@ -641,6 +938,114 @@ ${rawText}
     res.json(parsed);
   } catch (error) {
     handleGenAiError(res, error, 'Error in /api/notes-synthesizer');
+  }
+});
+
+// 8b. Step-by-Step Concept Explainer
+app.post('/api/concept-explainer', async (req, res) => {
+  try {
+    const {
+      concept,
+      subject = 'STEM & General Science',
+      gradeLevel = 'College / Undergraduate',
+      targetAudience = 'A determined student seeking deep intuition'
+    } = req.body;
+
+    if (!concept) {
+      return res.status(400).json({ error: 'Concept name is required.' });
+    }
+
+    const systemInstruction = `You are EduGenie's Lead Socratic Concept Explainer.
+Your mission is to break down difficult, counterintuitive, or intimidating concepts step-by-step so any student can achieve true, lasting mastery.
+Target Concept: "${concept}"
+Subject Context: ${subject}
+Level: ${gradeLevel}
+
+Pedagogical Structure:
+1. Provide a memorable real-world intuitive metaphor that grounds the abstraction immediately.
+2. Break the explanation down into 4-6 progressive chronological steps:
+   - Step 1: The Core Motivation / Why does this concept exist?
+   - Step 2: The Core Mechanism / How does it work physically or logically?
+   - Step 3: The Formal Rules, Mathematics, or Pathway.
+   - Step 4: A concrete Walkthrough / Worked Example.
+   - Step 5: The Crucial Nuance or Caveat.
+3. Call out the exact common misconceptions students struggle with.
+4. Provide 2 interactive self-check questions with detailed answers so students can verify their grasp.`;
+
+    const promptText = `Explain this difficult concept step by step:
+Concept: "${concept}"
+Subject: "${subject}"
+Grade Level: "${gradeLevel}"
+Audience: "${targetAudience}"`;
+
+    const response = await generateWithFallback({
+      contents: promptText,
+      config: {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            conceptName: { type: Type.STRING },
+            coreIntuitionSummary: { type: Type.STRING },
+            difficultyLevel: { type: Type.STRING, description: 'Foundational, Intermediate, or Advanced' },
+            category: { type: Type.STRING },
+            intuitiveMetaphor: { type: Type.STRING, description: 'Vivid, memorable analogy' },
+            steps: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  stepNumber: { type: Type.INTEGER },
+                  stageTitle: { type: Type.STRING },
+                  subtitle: { type: Type.STRING },
+                  explanation: { type: Type.STRING },
+                  analogyOrVisual: { type: Type.STRING },
+                  keyRuleOrFormula: { type: Type.STRING },
+                  pitfallToAvoid: { type: Type.STRING }
+                },
+                required: ['stepNumber', 'stageTitle', 'subtitle', 'explanation']
+              }
+            },
+            realWorldScenario: { type: Type.STRING },
+            commonMisconceptions: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            selfCheckQuestions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  question: { type: Type.STRING },
+                  answer: { type: Type.STRING },
+                  explanation: { type: Type.STRING }
+                },
+                required: ['question', 'answer', 'explanation']
+              }
+            },
+            masteryTakeaway: { type: Type.STRING }
+          },
+          required: [
+            'conceptName',
+            'coreIntuitionSummary',
+            'difficultyLevel',
+            'category',
+            'intuitiveMetaphor',
+            'steps',
+            'realWorldScenario',
+            'commonMisconceptions',
+            'selfCheckQuestions',
+            'masteryTakeaway'
+          ]
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    res.json(parsed);
+  } catch (error) {
+    handleGenAiError(res, error, 'Error in /api/concept-explainer');
   }
 });
 
@@ -974,6 +1379,233 @@ Your goal is to bridge the gap between classroom/study time and home life in a w
     handleGenAiError(res, error, 'Error in /api/parent-digest');
   }
 });
+
+// 14. Multimodal Document & Image Analysis (Summarize, Visual Solver, Key Terms, Flashcards)
+app.post('/api/document-vision/analyze', async (req, res) => {
+  try {
+    const {
+      fileData,
+      mimeType = 'image/png',
+      fileName = 'uploaded_document',
+      mode = 'summarize',
+      userPrompt = '',
+      subject = 'General Education',
+      gradeLevel = 'College / Undergraduate'
+    } = req.body;
+
+    if (!fileData) {
+      return res.status(400).json({ error: 'File data (base64) is required.' });
+    }
+
+    const cleanBase64 = fileData.replace(/^data:[^;]+;base64,/, '');
+
+    const systemInstruction = `You are EduGenie's Multimodal Academic Vision and Document Specialist.
+Analyze the provided document, image, chart, whiteboard, handwritten problem, or PDF page.
+Academic Context:
+- Subject: ${subject}
+- Grade Level: ${gradeLevel}
+- Processing Mode: ${mode}
+${userPrompt ? `- User Specific Focus: "${userPrompt}"` : ''}
+
+Your tasks:
+1. Identify the document type ('diagram', 'handwritten_notes', 'textbook_page', 'scientific_paper', or 'syllabus_or_assignment').
+2. Provide an accurate, pedagogical executive summary of the content.
+3. Extract key insights, mechanisms, or principles.
+4. If equations, formulas, or specialized terminology appear in the visual or text, extract them with contextual explanations.
+5. If the user requested problem solving or if a problem/exercise is detected, generate a step-by-step mathematical/conceptual solution with step justifications and a sanity check.
+6. Provide 4 thoughtful follow-up questions for deeper student exploration.
+7. Generate 3 high-yield active recall flashcard prompts derived directly from the document.`;
+
+    const promptText = `Analyze this ${mimeType.includes('pdf') ? 'PDF document' : 'image'} in detail.
+File name: "${fileName}".
+Mode: "${mode}".
+${userPrompt ? `Specific focus/question: "${userPrompt}"` : 'Extract key takeaways, core formulas, and pedagogical insights.'}`;
+
+    const contents = [
+      {
+        role: 'user',
+        parts: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: cleanBase64,
+            },
+          },
+          {
+            text: promptText,
+          },
+        ],
+      },
+    ];
+
+    const response = await generateWithFallback({
+      contents,
+      config: {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            mode: { type: Type.STRING },
+            documentTitle: { type: Type.STRING },
+            detectedType: {
+              type: Type.STRING,
+              description: 'diagram, handwritten_notes, textbook_page, scientific_paper, or syllabus_or_assignment'
+            },
+            executiveSummary: { type: Type.STRING },
+            keyInsightsOrPoints: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            extractedFormulasOrTerms: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  termOrFormula: { type: Type.STRING },
+                  explanation: { type: Type.STRING },
+                  locationContext: { type: Type.STRING }
+                },
+                required: ['termOrFormula', 'explanation']
+              }
+            },
+            stepByStepSolution: {
+              type: Type.OBJECT,
+              properties: {
+                identifiedProblem: { type: Type.STRING },
+                steps: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      stepNumber: { type: Type.INTEGER },
+                      action: { type: Type.STRING },
+                      justification: { type: Type.STRING }
+                    },
+                    required: ['stepNumber', 'action', 'justification']
+                  }
+                },
+                finalResultOrTakeaway: { type: Type.STRING },
+                verificationSanityCheck: { type: Type.STRING }
+              },
+              required: ['identifiedProblem', 'steps', 'finalResultOrTakeaway', 'verificationSanityCheck']
+            },
+            suggestedQuestions: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            flashcardPrompts: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  front: { type: Type.STRING },
+                  back: { type: Type.STRING },
+                  mnemonic: { type: Type.STRING }
+                },
+                required: ['front', 'back']
+              }
+            }
+          },
+          required: [
+            'mode',
+            'documentTitle',
+            'detectedType',
+            'executiveSummary',
+            'keyInsightsOrPoints',
+            'suggestedQuestions'
+          ]
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    res.json(parsed);
+  } catch (error) {
+    handleGenAiError(res, error, 'Error in /api/document-vision/analyze');
+  }
+});
+
+// 15. Multimodal Document & Image Question Answering (Q&A)
+app.post('/api/document-vision/qa', async (req, res) => {
+  try {
+    const {
+      fileData,
+      mimeType = 'image/png',
+      question,
+      subject = 'General Education',
+      gradeLevel = 'College / Undergraduate'
+    } = req.body;
+
+    if (!fileData || !question) {
+      return res.status(400).json({ error: 'File data and question are required.' });
+    }
+
+    const cleanBase64 = fileData.replace(/^data:[^;]+;base64,/, '');
+
+    const systemInstruction = `You are EduGenie's Multimodal Study Tutor specializing in visual and document-based inquiry.
+A student is asking a specific question regarding the uploaded image, diagram, textbook page, or PDF.
+Subject: ${subject}, Grade Level: ${gradeLevel}.
+
+Requirements:
+1. Ground your answer strictly in the visual/textual evidence presented in the file.
+2. If citing a diagram part, figure, paragraph, or formula, reference where it is located.
+3. Provide a clear, intuitive answer.
+4. Formulate a Socratic follow-up question that challenges the student to think one step further.
+5. List 2-3 related concepts.`;
+
+    const contents = [
+      {
+        role: 'user',
+        parts: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: cleanBase64,
+            },
+          },
+          {
+            text: `Question about this document/image: "${question}"`,
+          },
+        ],
+      },
+    ];
+
+    const response = await generateWithFallback({
+      contents,
+      config: {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            question: { type: Type.STRING },
+            answer: { type: Type.STRING },
+            directEvidenceOrQuote: { type: Type.STRING },
+            socraticFollowUp: { type: Type.STRING },
+            relatedConcepts: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          },
+          required: [
+            'question',
+            'answer',
+            'directEvidenceOrQuote',
+            'socraticFollowUp',
+            'relatedConcepts'
+          ]
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    res.json(parsed);
+  } catch (error) {
+    handleGenAiError(res, error, 'Error in /api/document-vision/qa');
+  }
+});
+
 
 // Vite middleware for dev or static serving for prod
 async function startServer() {

@@ -14,13 +14,15 @@ import {
   Flame,
   Compass,
   Users,
-  HeartHandshake
+  HeartHandshake,
+  Eye
 } from 'lucide-react';
 import { GradeLevel, SubjectCategory } from '../types';
 import { stopSpeaking } from '../utils/speech';
 
 export type ActiveTab =
   | 'chat'
+  | 'docvision'
   | 'pathways'
   | 'mindmap'
   | 'flashcards'
@@ -75,15 +77,16 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const tabs = [
     { id: 'chat', label: 'Socratic Tutor', icon: GraduationCap, badge: 'Conversational' },
+    { id: 'docvision', label: 'Study Materials & Q&A', icon: Eye, badge: 'Upload & Ask' },
+    { id: 'planner', label: 'Personalized Study Plan', icon: CalendarCheck, badge: 'Goals & Roadmap' },
+    { id: 'feynman', label: 'Answer Evaluator', icon: FlaskConical, badge: 'Feedback & Diagnosis' },
+    { id: 'quiz', label: 'Quiz & Practice Tests', icon: HelpCircle, badge: 'MCQs & Exams' },
     { id: 'pathways', label: 'Adaptive Pathways', icon: Compass, badge: 'Personalized' },
     { id: 'group', label: 'Group Study', icon: Users, badge: 'Live Sync' },
     { id: 'mindmap', label: 'Concept Mindmap', icon: BrainCircuit, badge: 'Interactive' },
     { id: 'flashcards', label: 'Flashcards', icon: Layers, badge: 'Active Recall' },
-    { id: 'quiz', label: 'Adaptive Quiz', icon: HelpCircle, badge: 'Diagnostic' },
-    { id: 'feynman', label: 'Feynman Lab', icon: FlaskConical, badge: 'Simplifier' },
-    { id: 'solver', label: 'Step Solver', icon: Calculator, badge: 'Hint Ladder' },
-    { id: 'planner', label: 'Study Planner', icon: CalendarCheck, badge: 'Roadmap' },
-    { id: 'notes', label: 'Cornell Notes', icon: FileSpreadsheet, badge: 'Synthesizer' },
+    { id: 'solver', label: 'Step-by-Step Explainer', icon: Calculator, badge: 'Concepts & Problems' },
+    { id: 'notes', label: 'Concise Notes Synthesizer', icon: FileSpreadsheet, badge: 'Summarize Materials' },
     { id: 'dashboard', label: 'Teacher / Parent', icon: HeartHandshake, badge: 'Analytics' },
   ] as const;
 
